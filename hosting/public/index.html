@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>KORIBOR Rates</title>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script src="firebase-config.js"></script>
+        <style>
+            body, html {
+                height: 90%;
+                margin: 0;
+                padding: 0;
+            }
+            #chartContainer {
+                height: 85vh;
+                width: 95vw;
+                margin: auto;
+            }
+            #periodSelector {
+                text-align: center;
+                margin: 10px 0;
+            }
+            button {
+                margin: 0 5px;
+                padding: 5px 10px;
+            }
+            #periodSelector button {
+                padding: 10px 15px;
+                margin: 0 5px;
+                border: none;
+                background-color: #f0f0f0;
+                cursor: pointer;
+                transition: all 0.3s ease;
+            }
+            #periodSelector button.active {
+                background-color: #4CAF50;
+                color: white;
+                font-weight: bold;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            }
+        </style>
+    </head>
+    <body>
+        <div id="periodSelector">
+            <button onclick="updateChartPeriod('1week')">1주</button>
+            <button onclick="updateChartPeriod('1month')">1달</button>
+            <button onclick="updateChartPeriod('3months')">3개월</button>
+            <button onclick="updateChartPeriod('1year')" class="active">1년</button>
+            <button onclick="updateChartPeriod('all')">전체</button>
+        </div>
+        <div id="chartContainer">
+            <canvas id="rateChart"></canvas>
+        </div>
+        
+        <script type="module">
+            // Firebase SDK module import
+            import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.0.0/firebase-app.js';
+            import { getDatabase, ref, onValue } from 'https://www.gstatic.com/firebasejs/9.0.0/firebase-database.js';
+
+            const app = initializeApp(firebaseConfig);
+            const db = getDatabase(app);
+
+            // Fetch data and update chart
+            const koriborRef = ref(db, 'koribor-rates');
+        
+            let chart;
+            let allData;
+            let currentPeriod = '1year';
+            let currentDatasets = ['3Month'];
+
+            onValue(koriborRef, (snapshot) => {
+                allData = snapshot.val();
+                if (allData) {
+                    createChart(allData, currentPeriod, currentDatasets);
+                } else {
+                    console.log("No data available");
+                }
+            });
+
+            function createChart(data, period, visibleDatasets) {
+                const ctx = document.getElementById('rateChart').getContext('2d');
+                
+                const sortedDates = Object.keys(data).sort((a, b) => new Date(a) - new Date(b));
+                const filteredDates = filterDatesByPeriod(sortedDates, period);
+                
+                const datasets = ['1Week', '1Month', '2Month', '3Month', '6Month', '12Month'].map(periodKey => ({
+                    label: periodKey,
+                    data: filteredDates.map(date => parseFloat(data[date][periodKey])),
+                    borderColor: getRandomColor(),
+                    fill: false,
+                    hidden: !visibleDatasets.includes(periodKey),
+                    pointRadius: 0, 
+                    borderWidth: 1, 
+                    tension: 0.1 
+                }));
+
+                if (chart) {
+                    chart.destroy();
+                }
+
+                chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: filteredDates,
+                        datasets: datasets
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'KORIBOR Rates'
+                            },
+                            legend: {
+                                position: 'top',
+                                onClick: (e, legendItem, legend) => {
+                                    const index = legendItem.datasetIndex;
+                                    const ci = legend.chart;
+                                    const meta = ci.getDatasetMeta(index);
+                                    meta.hidden = meta.hidden === null ? !ci.data.datasets[index].hidden : null;
+                                    const checkbox = document.querySelector(`#dataSelector input[value="${legendItem.text}"]`);
+                                    checkbox.checked = !meta.hidden;
+                                    updateCurrentDatasets();
+                                    ci.update();
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                display: true,
+                                title: {
+                                    display: true,
+                                    text: 'Date'
+                                }
+                            },
+                            y: {
+                                display: true,
+                                title: {
+                                    display: true,
+                                    text: 'Rate (%)'
+                                }
+                            }
+                        },
+                        elements: {
+                            point: {
+                                radius: 0,
+                                hitRadius: 10,
+                                hoverRadius: 10
+                            }
+                        }
+                    }
+                });
+
+                // update checkbox
+                document.querySelectorAll('#dataSelector input').forEach(checkbox => {
+                    checkbox.checked = visibleDatasets.includes(checkbox.value);
+                });
+            }
+
+            function updateCurrentDatasets() {
+                currentDatasets = Array.from(document.querySelectorAll('#dataSelector input:checked')).map(checkbox => checkbox.value);
+            }
+
+            function filterDatesByPeriod(dates, period) {
+                const now = new Date();
+                switch (period) {
+                    case '1week':
+                        return dates.filter(date => new Date(date) >= new Date(now - 7 * 24 * 60 * 60 * 1000));
+                    case '1month':
+                        return dates.filter(date => new Date(date) >= new Date(now.getFullYear(), now.getMonth() - 1, now.getDate()));
+                    case '3months':
+                        return dates.filter(date => new Date(date) >= new Date(now.getFullYear(), now.getMonth() - 3, now.getDate()));
+                    case '1year':
+                        return dates.filter(date => new Date(date) >= new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()));
+                    case 'all':
+                    default:
+                        return dates;
+                }
+            }
+
+            function getRandomColor() {
+                const r = Math.floor(Math.random() * 255);
+                const g = Math.floor(Math.random() * 255);
+                const b = Math.floor(Math.random() * 255);
+                return `rgba(${r}, ${g}, ${b}, 1)`;
+            }
+
+            window.updateChartPeriod = function(period) {
+                currentPeriod = period;
+                createChart(allData, period, currentDatasets);
+                
+                document.querySelectorAll('#periodSelector button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                
+                document.querySelector(`#periodSelector button[onclick="updateChartPeriod('${period}')"]`).classList.add('active');
+            };
+
+            document.querySelectorAll('#dataSelector input').forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    updateCurrentDatasets();
+                    createChart(allData, currentPeriod, currentDatasets);
+                });
+            });
+        </script>
+    </body>
+</html>
