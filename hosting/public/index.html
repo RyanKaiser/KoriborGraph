@@ -67,7 +67,7 @@
             let chart;
             let allData;
             let currentPeriod = '1year';
-            let currentDatasets = ['3Month'];
+            let currentDatasets = ['1Week', '1Month', '2Month', '3Month', '6Month', '12Month'];
 
             onValue(koriborRef, (snapshot) => {
                 allData = snapshot.val();
@@ -121,9 +121,14 @@
                                     const ci = legend.chart;
                                     const meta = ci.getDatasetMeta(index);
                                     meta.hidden = meta.hidden === null ? !ci.data.datasets[index].hidden : null;
-                                    const checkbox = document.querySelector(`#dataSelector input[value="${legendItem.text}"]`);
-                                    checkbox.checked = !meta.hidden;
-                                    updateCurrentDatasets();
+                                    
+                                    // Update currentDatasets
+                                    if (meta.hidden) {
+                                        currentDatasets = currentDatasets.filter(ds => ds !== legendItem.text);
+                                    } else {
+                                        currentDatasets.push(legendItem.text);
+                                    }
+                                    
                                     ci.update();
                                 }
                             }
@@ -153,15 +158,6 @@
                         }
                     }
                 });
-
-                // update checkbox
-                document.querySelectorAll('#dataSelector input').forEach(checkbox => {
-                    checkbox.checked = visibleDatasets.includes(checkbox.value);
-                });
-            }
-
-            function updateCurrentDatasets() {
-                currentDatasets = Array.from(document.querySelectorAll('#dataSelector input:checked')).map(checkbox => checkbox.value);
             }
 
             function filterDatesByPeriod(dates, period) {
@@ -198,13 +194,6 @@
                 
                 document.querySelector(`#periodSelector button[onclick="updateChartPeriod('${period}')"]`).classList.add('active');
             };
-
-            document.querySelectorAll('#dataSelector input').forEach(checkbox => {
-                checkbox.addEventListener('change', function() {
-                    updateCurrentDatasets();
-                    createChart(allData, currentPeriod, currentDatasets);
-                });
-            });
         </script>
     </body>
 </html>
