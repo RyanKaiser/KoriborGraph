@@ -5,6 +5,7 @@ __pycache__/
 
 # Firebase related
 firebase-config.js
+koribor-chart-firebase-adminsdk.json
    
 # etc
 secrets.json
